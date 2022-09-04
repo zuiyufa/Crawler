@@ -1,5 +1,6 @@
 # Crawler
-selenium模拟登录获取cookie，requests爬取图片。
+ PIXIV色图爬虫
+ selenium模拟登录获取cookie，requests爬取图片。
 
  操作环境：
  1.Python3.8

@@ -1,4 +1,6 @@
 # Crawler
+selenium模拟登录获取cookie，requests爬取图片。
+
  操作环境：
  1.Python3.8
  2.Microsoft Edge 105.0.1343.27

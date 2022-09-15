@@ -9,9 +9,9 @@ import re
 from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium import webdriver #-------------------#配置webdriver
-PROXIES="http://127.0.0.1:8000"  # 这里填代理的端口
+PROXIES="http://127.0.0.1:7890"  # 这里填代理的端口
 edge_options=webdriver.EdgeOptions()
-edge_options.headless=True  # 设置浏览器是否显示，如果要谷歌验证的话就把这个打开
+edge_options.headless=True # 设置浏览器是否显示，如果要谷歌验证的话就把这个打开
 edge_options.add_argument('--proxy-server=%s' % PROXIES)
 driver=webdriver.Edge(options=edge_options)
 try:
@@ -87,8 +87,8 @@ class PixivSpider:
         self.Headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36',
                         'referer': 'https://accounts.pixiv.net/login?return_to=https://www.pixiv.net/&lang=zh&source=pc&view_type=page'}  # referer用于对付防盗链
         self.Cookies = {}
-        self.proxies= {'http': 'http://127.0.0.1:8000',
-                      'https': 'http://127.0.0.1:8000'}  # 这里也是代理地址
+        self.proxies= {'http': 'http://127.0.0.1:7890',
+                      'https': 'http://127.0.0.1:7890'}  # 这里也是代理地址
 
     def save_html(self,filepath,filename,filesuffix,imgData,id,title):#-------------#保存图片到本地
         try:
@@ -134,8 +134,11 @@ class PixivSpider:
                 print('未知错误，重启')
                 sys.exit()
             html1 = req1.text
+            #print(html1)
             data = json.loads(html1)
+            print(data)
             data_list = data['body']['illust']["data"]
+            #print(data_list)
             self.tag_list = data['body']['relatedTags']
             if len(data_list) == 0:
                 print('未搜索到任何图片，请重启之后输入新关键词')
@@ -161,9 +164,9 @@ class PixivSpider:
                     self.save_html(filepath, filename, filesuffix, imgData, id, title)
                 except RuntimeError:
                     print("分析得到的图片源少于图片地址，提前结束")
-                except:
-                    print("遇到未知错误，重启")
-                    sys.exit()
+                #except:
+                    #print("遇到未知错误，重启")
+                    #sys.exit()
                 print('第{}页第{}张图片保存成功！'.format(pn,i))
             print('第%d页的图片全部抓取成功！' % page)
             #time.sleep(random.randint(3,5))
@@ -219,33 +222,102 @@ class PixivSpider:
             print("未知错误，重启")
             sys.exit()
 
-    def run(self):  #------------------------------#主程序
-        pixiv_id= input('请输入pixiv账号：')  #这里可以填写成自己的账号密码
-        pixiv_pwd= input('请输入密码：')
-        name = input('请输入关键词：')
-        finalname = self.handle_name(name)
-        mode=self.chose_mode()
-        self.Cookies = getcookies(pixiv_id, pixiv_pwd)
-        self.download_picture(finalname,mode)
-        print('全部抓取完成')
+    def download_randonsetu(self):
+        finalname='随机色图库'
+        randomsutuurl='https://api.lolicon.app/setu/v2'
+        req2=requests.get(url=randomsutuurl,proxies=self.proxies)
+        print(req2)
+        html2=req2.text
+        #print(req2.content.decode('utf-8'))
+        data = json.loads(html2)
+        data_list = data['data']
+        print(data_list)
+        if len(data_list) == 0:
+            print('我图图呢？')
+            sys.exit()
+        for item in data_list:  # 遍历列表中所有图片有关的信息
+            oldtitle = item['title']
+            title = validateTitle(oldtitle)
+            id = item['pid']
+            self.tag_list=item['tags']
+            ismode= item['r18']
+            if ismode==0:
+                mode="safe"
+            elif ismode==1:
+                mode="r18"
+            else:
+                mode="all"
+            originalurl=item['urls']
+        print('图片标题：'+title)
+        pictag=self.tag_list[0]
+        print('图片标签：'+pictag)
+        picture=originalurl['original']
+        print('获取到的图片源：' + picture)
+        pictureurl = (picture)
+        session = requests.Session()
+        for cookie in self.Cookies:
+            session.cookies.set(cookie['name'], cookie['value'])
+        req = session.get(pictureurl, headers=self.Headers, proxies=self.proxies)
+        imgData = req.content  # 图片的二进制数据流
+        filepath = 'D:\PIXIV\{} {}'.format(finalname, mode)  # 这里可以修改存储路径和文件夹名称
+        filename = '/{}{}'
+        filesuffix = '.jpg'
+        self.save_html(filepath, filename, filesuffix, imgData, id, title)
+        print("保存成功")
+        return pictag
+
+    def secondMenu(self,finalname,mode):
         while True:
-            print("1.退出 2.继续下载其他页 3.浏览其他标签")
+            print("1.继续下载当前标签的其他页 2.浏览其他标签并下载 3.返回上一步菜单")
+            seccondchoice = int(input('请输入一个数字'))
+            try:
+                if seccondchoice== 1:
+                    newfinalname=self.handle_name(finalname)
+                    self.download_picture(newfinalname, mode)
+                elif seccondchoice == 2:
+                    self.show_tag_list(self.tag_list)
+                    newtagname = self.chose_tag_list(self.tag_list)
+                    finalname = self.handle_name(newtagname)
+                    mode = self.chose_mode()
+                    self.download_picture(finalname, mode)
+                elif seccondchoice == 3:
+                    break
+            except:
+                print('输入错误。返回上级菜单')
+                break
+
+
+
+    def run(self):  #------------------------------#主程序
+        pixiv_id='1140122356@qq.com' #input('请输入pixiv账号：')  #这里可以填写成自己的账号密码
+        pixiv_pwd='Zlt.1140122356' #input('请输入密码：')
+        #name = input('请输入关键词：')
+        #finalname = self.handle_name(name)
+        #mode=self.chose_mode()
+        mode='all'
+        self.Cookies = getcookies(pixiv_id, pixiv_pwd)
+        #self.download_picture(finalname,mode)
+        while True:
+            print("1.输入关键词来下载 2.下载一张随机色图 3.退出")
             choice=int(input('请选择一个数字'))
             try:
-                if choice==1:
+                if choice==3:
                     break
-                elif choice==2:
-                    self.download_picture(finalname,mode)
-                elif choice==3:
-                    self.show_tag_list(self.tag_list)
-                    newtagname=self.chose_tag_list(self.tag_list)
-                    finalname=self.handle_name(newtagname)
+                elif choice==1:
+                    name = input('请输入关键词：')
+                    finalname = self.handle_name(name)
                     mode=self.chose_mode()
-                    self.download_picture(finalname, mode)
+                    self.download_picture(finalname,mode)
+                    self.secondMenu(finalname,mode)
+                elif choice==2:
+                    finalname=self.download_randonsetu()
+                    self.secondMenu(finalname, mode)
                 else:
                     print("输入错误，重启")
             except:
                 print(("未知错误，重启"))
-        sys.exit()
+                break
+            finally:
+                pass
 test = PixivSpider()
 test.run()
